@@ -34,17 +34,26 @@ class RegType(enum.Enum):
     REG_QWORD = 11
 
 
-def data_to_entry(data: bytes) -> Entry:
-    pass
+def body_to_entry(body: str) -> Entry:
+    # The body consists of registry values in the following format.
+    # [key;value;type;size;data]
+    key, value, reg_type, size, d = body.split(";")
 
+    # Fix ups
 
-def seek_until(f, b):
-    i = 0
-    start = f.tell()
-    while f.read(len(b)) != b:
-        i += 1
-        f.seek(start + i)
-    return i
+    # Key (remove leading '[' and trailing '\x00'
+    key = key[1:].rstrip("\x00")
+    # Value (remove trailing '\x00')
+    value = value.rstrip("\x00")
+    # Type
+    reg_type = struct.unpack("<H", reg_type.encode())[0]
+    # Size
+    size = struct.unpack("<H", size.encode())[0]
+    # Data (remove trailing '\x00' only for REG_SZ types)
+    if reg_type == RegType.REG_SZ.value:
+        d = d.rstrip("\x00")
+
+    return Entry(key=key, value=value, regtype=reg_type, size=size, data=d.encode())
 
 
 def main(filename):
@@ -65,27 +74,10 @@ def main(filename):
         decoded = f.read().decode("UTF-16-LE")
         entries = []
 
-        for body in [x[1:] for x in decoded.split("]") if x]:
-            # The body consists of registry values in the following format.
-            # [key;value;type;size;data]
-            key, value, reg_type, size, d = body.split(";")
-
-            # Fix ups
-
-            # Key
-            key = key.rstrip("\x00")
-            # Value
-            value = value.rstrip("\x00")
-            # Type
-            reg_type = struct.unpack("<H", reg_type.encode())[0]
-            # Size
-            size = struct.unpack("<H", size.encode())[0]
-            # Data
-            if reg_type == RegType.REG_SZ.value:
-                d = d.rstrip("\x00")
-
-            entry = Entry(key=key, value=value, regtype=reg_type, size=size, data=d.encode())
-            entries.append(entry)
+        for body in decoded.split("]"):
+            if not body:
+                continue
+            entries.append(body_to_entry(body))
 
     pprint_entries(entries)
 

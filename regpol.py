@@ -5,6 +5,10 @@ import struct
 
 
 class Entry:
+    # https://learn.microsoft.com/en-us/previous-versions/windows/desktop/policy/registry-policy-file-format
+    REGFILE_SIGNATURE = b'\x50\x52\x65\x67'  # Defined as 0x67655250
+    REGISTRY_FILE_VERSION = 0x00000001  # Initially defined as 1, then incremented each time the file format is changed.
+
     def __init__(self, key: str, value: str, regtype: int, size: int, data: bytes):
         self.key = key
         self.value = value
@@ -12,10 +16,27 @@ class Entry:
         self.size = size
         self.data = data
 
+    @classmethod
+    def from_str(cls, body):
+        # The body consists of registry values in the following format.
+        # [key;value;type;size;data]
+        key, value, reg_type, size, d = body.split(";")
 
-# https://learn.microsoft.com/en-us/previous-versions/windows/desktop/policy/registry-policy-file-format
-REGFILE_SIGNATURE = b'\x50\x52\x65\x67'  # Defined as 0x67655250
-REGISTRY_FILE_VERSION = 0x00000001  # Initially defined as 1, then incremented each time the file format is changed.
+        # Fix ups
+
+        # Key (remove leading '[' and trailing '\x00'
+        key = key[1:].rstrip("\x00")
+        # Value (remove trailing '\x00')
+        value = value.rstrip("\x00")
+        # Type
+        reg_type = struct.unpack("<H", reg_type.encode())[0]
+        # Size
+        size = struct.unpack("<H", size.encode())[0]
+        # Data (remove trailing '\x00' only for REG_SZ types)
+        if reg_type == RegType.REG_SZ.value:
+            d = d.rstrip("\x00")
+
+        return cls(key=key, value=value, regtype=reg_type, size=size, data=d.encode())
 
 
 # https://learn.microsoft.com/en-us/windows/win32/shell/hkey-type
@@ -34,40 +55,18 @@ class RegType(enum.Enum):
     REG_QWORD = 11
 
 
-def body_to_entry(body: str) -> Entry:
-    # The body consists of registry values in the following format.
-    # [key;value;type;size;data]
-    key, value, reg_type, size, d = body.split(";")
-
-    # Fix ups
-
-    # Key (remove leading '[' and trailing '\x00'
-    key = key[1:].rstrip("\x00")
-    # Value (remove trailing '\x00')
-    value = value.rstrip("\x00")
-    # Type
-    reg_type = struct.unpack("<H", reg_type.encode())[0]
-    # Size
-    size = struct.unpack("<H", size.encode())[0]
-    # Data (remove trailing '\x00' only for REG_SZ types)
-    if reg_type == RegType.REG_SZ.value:
-        d = d.rstrip("\x00")
-
-    return Entry(key=key, value=value, regtype=reg_type, size=size, data=d.encode())
-
-
 def main(filename):
     """Print contents of Registry.pol file"""
 
     with open(filename, "rb") as f:
 
         magic = struct.unpack("<4s", f.read(4))[0]
-        if magic != REGFILE_SIGNATURE:
+        if magic != Entry.REGFILE_SIGNATURE:
             print("Missing Registry.pol magic string: {0}".format(magic))
             input()
 
         version = struct.unpack("<I", f.read(4))[0]
-        if version != REGISTRY_FILE_VERSION:
+        if version != Entry.REGISTRY_FILE_VERSION:
             print("Incorrect Registry.pol version: {0}".format(version))
             input()
 
@@ -77,7 +76,7 @@ def main(filename):
         for body in decoded.split("]"):
             if not body:
                 continue
-            entries.append(body_to_entry(body))
+            entries.append(Entry.from_str(body))
 
     pprint_entries(entries)
 

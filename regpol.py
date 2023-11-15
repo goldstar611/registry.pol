@@ -4,11 +4,42 @@ import enum
 import struct
 
 
-class Entry:
+class RegFile:
     # https://learn.microsoft.com/en-us/previous-versions/windows/desktop/policy/registry-policy-file-format
     REGFILE_SIGNATURE = b'\x50\x52\x65\x67'  # Defined as 0x67655250
     REGISTRY_FILE_VERSION = 0x00000001  # Initially defined as 1, then incremented each time the file format is changed.
 
+    def __init__(self):
+        self.entries = []
+
+    @classmethod
+    def load(cls, filename):
+        with open(filename, "rb") as f:
+
+            magic = struct.unpack("<4s", f.read(4))[0]
+            if magic != cls.REGFILE_SIGNATURE:
+                print("Missing Registry.pol magic string: {0}".format(magic))
+                input()
+
+            version = struct.unpack("<I", f.read(4))[0]
+            if version != cls.REGISTRY_FILE_VERSION:
+                print("Incorrect Registry.pol version: {0}".format(version))
+                input()
+
+            decoded = f.read().decode("UTF-16-LE")
+            entries = []
+
+            for body in decoded.split("]"):
+                if not body:
+                    continue
+                entries.append(Entry.from_str(body))
+
+        c = cls()
+        c.entries = entries
+        return c
+
+
+class Entry:
     def __init__(self, key: str, value: str, regtype: int, size: int, data: bytes):
         self.key = key
         self.value = value
@@ -33,7 +64,7 @@ class Entry:
         # Size
         size = struct.unpack("<H", size.encode())[0]
         # Data (remove trailing '\x00' only for REG_SZ types)
-        if reg_type == RegType.REG_SZ.value:
+        if RegType(reg_type) == RegType.REG_SZ:
             d = d.rstrip("\x00")
 
         return cls(key=key, value=value, regtype=reg_type, size=size, data=d.encode())
@@ -57,28 +88,8 @@ class RegType(enum.Enum):
 
 def main(filename):
     """Print contents of Registry.pol file"""
-
-    with open(filename, "rb") as f:
-
-        magic = struct.unpack("<4s", f.read(4))[0]
-        if magic != Entry.REGFILE_SIGNATURE:
-            print("Missing Registry.pol magic string: {0}".format(magic))
-            input()
-
-        version = struct.unpack("<I", f.read(4))[0]
-        if version != Entry.REGISTRY_FILE_VERSION:
-            print("Incorrect Registry.pol version: {0}".format(version))
-            input()
-
-        decoded = f.read().decode("UTF-16-LE")
-        entries = []
-
-        for body in decoded.split("]"):
-            if not body:
-                continue
-            entries.append(Entry.from_str(body))
-
-    pprint_entries(entries)
+    reg_file = RegFile.load(filename)
+    pprint_entries(reg_file.entries)
 
 
 def pprint_entries(entries):

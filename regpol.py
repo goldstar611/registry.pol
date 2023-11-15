@@ -2,6 +2,7 @@
 
 import enum
 import struct
+from typing import List
 
 
 class RegFile:
@@ -10,30 +11,22 @@ class RegFile:
     REGISTRY_FILE_VERSION = 0x00000001  # Initially defined as 1, then incremented each time the file format is changed.
 
     def __init__(self):
-        self.entries = []
+        self.entries: List[Entry] = []
 
     @classmethod
-    def load(cls, filename):
+    def load(cls, filename: str):
         with open(filename, "rb") as f:
-
             magic = struct.unpack("<4s", f.read(4))[0]
             if magic != cls.REGFILE_SIGNATURE:
-                print("Missing Registry.pol magic string: {0}".format(magic))
-                input()
+                raise ValueError("Missing Registry.pol magic string: {0}".format(magic))
 
             version = struct.unpack("<I", f.read(4))[0]
             if version != cls.REGISTRY_FILE_VERSION:
-                print("Incorrect Registry.pol version: {0}".format(version))
-                input()
+                raise ValueError("Incorrect Registry.pol version: {0}".format(version))
 
             decoded = f.read().decode("UTF-16-LE")
-            entries = []
 
-            for body in decoded.split("]"):
-                if not body:
-                    continue
-                entries.append(Entry.from_str(body))
-
+        entries = [Entry.loads(body) for body in decoded.split("]") if body]
         c = cls()
         c.entries = entries
         return c
@@ -48,7 +41,7 @@ class Entry:
         self.data = data
 
     @classmethod
-    def from_str(cls, body):
+    def loads(cls, body: str):
         # The body consists of registry values in the following format.
         # [key;value;type;size;data]
         key, value, reg_type, size, d = body.split(";")

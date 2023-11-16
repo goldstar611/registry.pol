@@ -40,11 +40,23 @@ class Entry:
         self.size = size
         self.data = data
 
+        self.is_delete = False
+        self.create_only = False
+
     @classmethod
     def loads(cls, body: str):
         # The body consists of registry values in the following format.
-        # [key;value;type;size;data]
-        key, value, reg_type, size, d = body.split(";")
+        # [key; value; type; size; data]
+        try:
+            key, value, reg_type, size, d = body.split(";")
+        except ValueError:
+            # If value, type, size, or data are missing or zero, only the registry key is created.
+            key = body.split(";")[0]
+            value = 0
+            reg_type = RegType.REG_NONE.value
+            size = 0
+            d = ""
+            print(f"Warning, ValueError encountered:\n{body}")
 
         # Fix ups
 

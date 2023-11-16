@@ -36,7 +36,7 @@ class Entry:
     def __init__(self, key: str, value: str, regtype: int, size: int, data: bytes):
         self.key = key
         self.value = value
-        self.regtype = regtype
+        self.regtype = RegType(regtype)
         self.size = size
         self.data = data
 
@@ -101,10 +101,10 @@ def main(filename):
 def pprint_entries(entries):
     for entry in entries:
         print(entry.key)
-        print("    value: {0}".format(entry.value))
-        print("    type:  {0} {1}".format(entry.regtype, RegType(entry.regtype).name))
-        print("    size:  {0}".format(entry.size))
-        print("    data:  {0}".format(entry.data))
+        print(f"    value: {entry.value}")
+        print(f"    type:  {entry.regtype}")
+        print(f"    size:  {entry.size}")
+        print(f"    data:  {entry.data}")
         print()
 
 

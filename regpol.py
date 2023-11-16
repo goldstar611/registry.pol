@@ -40,8 +40,9 @@ class Entry:
         self.size = size
         self.data = data
 
-        self.is_delete = False
-        self.create_only = False
+        self.is_delete = value.lower().startswith("**del")
+        # If value, type, size, or data are missing or zero, only the registry key is created.
+        self.create_only = not all([value, regtype, size, data])
 
     @classmethod
     def loads(cls, body: str):
